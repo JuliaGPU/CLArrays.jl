@@ -1,6 +1,7 @@
 using OpenCL: cl
 using Transpiler: CLMethod, EmptyStruct
 using Sugar
+import GPUArrays: gpu_call, linear_index
 
 immutable CLFunction{Args <: Tuple}
     program::cl.Kernel
@@ -17,15 +18,17 @@ function (clfunc::CLFunction{T}){T, T2, N}(A::CLArray{T2, N}, args...)
     clfunc(args, length(A))
 end
 
-function gpu_call{T, N}(f, A::CLArray{T, N}, args::Tuple, globalsize = length(A), localsize = nothing)
-    ctx = GPUArrays.context(A)
+function gpu_call(f, A::CLArray, args::Tuple, blocks = nothing, thread = nothing)
+    ctx = context(A)
     _args = if !isa(f, Tuple{String, Symbol})
-        (0f0, args...)# include "state"
+        (KernelState(), args...) # CLArrays "state"
     else
         args
     end
-    clfunc = CLFunction(f, _args, ctx.queue)
-    blocks, thread = thread_blocks_heuristic(globalsize)
+    clfunc = CLFunction(f, _args, global_queue(ctx))
+    if blocks == nothing
+        blocks, thread = thread_blocks_heuristic(length(A))
+    end
     clfunc(_args, blocks, thread)
 end
 
@@ -37,17 +40,16 @@ _to_cl_types(::Float64) = Float32
 _to_cl_types{T, N}(arg::CLArray{T, N}) = cli.CLArray{T, N}
 _to_cl_types{T}(x::LocalMemory{T}) = cli.LocalMemory{T}
 _to_cl_types(x::Ref{<: CLArray}) = _to_cl_types(x[])
-
-cl_convert(x::Ref{<: CLArray}) = cl_convert(x[])
-cl_convert(x::CLArray) = buffer(x)
-cl_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
-
 function _to_cl_types{T <: Union{cl.Buffer, cl.CLArray}}(arg::T)
     return cli.CLArray{eltype(arg), ndims(arg)}
 end
 function to_cl_types(args::Union{Vector, Tuple})
     map(_to_cl_types, args)
 end
+
+cl_convert(x::Ref{<: CLArray}) = cl_convert(x[])
+cl_convert(x::CLArray) = pointer(x)
+cl_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
 
 function cl_convert{T}(x::T)
     # empty objects are empty and are only usable for dispatch
@@ -57,7 +59,7 @@ function cl_convert{T}(x::T)
     convert(_to_cl_types(x), x)
 end
 
-cl_convert(x::cl.CLArray) = x.buffer # function objects are empty and are only usable for dispatch
+cl_convert(x::cl.CLArray) = pointer(x) # function objects are empty and are only usable for dispatch
 
 
 const cl_compiled_functions = Dict{Any, CLFunction}()
@@ -68,6 +70,7 @@ function cl_empty_compile_cache!()
 end
 
 
+
 function CLFunction{T}(f::Function, args::T, queue)
     ctx = cl.context(queue)
     device = first(cl.devices(ctx))
@@ -75,7 +78,7 @@ function CLFunction{T}(f::Function, args::T, queue)
     cltypes = to_cl_types(args)
     get!(cl_compiled_functions, (ctx.id, f, cltypes)) do # TODO make this faster
         source, method, fname = Transpiler.kernel_source(f, cltypes)
-        # println(source)
+        println(source)
         options = "-cl-denorms-are-zero -cl-mad-enable -cl-unsafe-math-optimizations"
         if version > v"1.2"
             options *= " -cl-std=CL1.2"

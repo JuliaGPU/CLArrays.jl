@@ -1,52 +1,77 @@
-immutable CLArray{T, N} <: GPUArray{T, N}
-    buffer::cl.Buffer{T}
+using OpenCL, Transpiler
+
+import Transpiler: cli
+import GPUArrays: GPUArray, unsafe_reinterpret, LocalMemory
+
+import Base: pointer, similar, size, convert, copy!
+
+mutable struct CLArray{T, N} <: GPUArray{T, N}
+    ptr::OwnedPtr{T}
     size::NTuple{N, Int}
 end
 
-buffer(x::CLArray) = x.buffer
-
-function cl_readbuffer(q, buf, dev_offset, hostref, nbytes)
-    n_evts  = UInt(0)
-    evt_ids = C_NULL
-    ret_evt = Ref{cl.CL_event}()
-    cl.@check cl.api.clEnqueueReadBuffer(
-        q.id, buf.id, cl.cl_bool(true),
-        dev_offset, nbytes, hostref,
-        n_evts, evt_ids, ret_evt
-    )
+# arguments are swapped to not override default constructor
+function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ptr::OwnedPtr{T}) where {T, N}
+    arr = CLArray{T, N}(ptr, size)
+    finalizer(arr, unsafe_free!)
+    arr
 end
-function cl_writebuffer(q, buf, dev_offset, hostref, nbytes)
-    n_evts  = UInt(0)
-    evt_ids = C_NULL
-    ret_evt = Ref{cl.CL_event}()
-    cl.@check cl.api.clEnqueueWriteBuffer(
-        q.id, buf.id, cl.cl_bool(true),
-        dev_offset, nbytes, hostref,
-        n_evts, evt_ids, ret_evt
-    )
+size(x::CLArray) = x.size
+pointer(x::CLArray) = x.ptr
+context(p::CLArray) = context(pointer(p))
+
+function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context()) where {T, N}
+    # element type has different padding from cl type in julia
+    # for fixedsize arrays we use vload/vstore, so we can use it packed
+    clT = !Transpiler.is_fixedsize_array(T) ? cl.packed_convert(T) : T
+    elems = prod(size)
+    elems = elems == 0 ? 1 : elems # OpenCL can't allocate 0 sized buffers
+    ptr = Mem.alloc(clT, elems, ctx)
+    arr = CLArray{clT, N}(size, ptr)
+    arr
 end
 
-function Base.copy!{T}(
+similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArray{T, N}(size)
+
+
+
+
+function unsafe_free!(a::CLArray)
+    ptr = pointer(a)
+    if !cl.is_ctx_id_alive(context(ptr).id)
+        #TODO logging that we don't free since context is not alive
+    else
+        Mem.free(ptr)
+    end
+end
+
+function unsafe_reinterpret(::Type{T}, A::CLArray{ET}, size::NTuple{N, Integer}) where {T, ET, N}
+    ptr = pointer(A)
+    Mem.retain(ptr) # we now have 2 finalizers for ptr, so it needs to be retained/increase refcount
+    ptrt = OwnedPtr{T}(ptr)
+    CLArray{T, N}(size, ptrt)
+end
+
+function copy!{T}(
         dest::Array{T}, d_offset::Integer,
         source::CLArray{T}, s_offset::Integer, amount::Integer
     )
     amount == 0 && return dest
     s_offset = (s_offset - 1) * sizeof(T)
     q = global_queue(source)
-    cl.finish(q)
-    cl_readbuffer(q, buffer(source), unsigned(s_offset), Ref(dest, d_offset), amount * sizeof(T))
+    # TODO unpack elements if they were converted
+    unsafe_copy!(q, Ref(dest, d_offset), s_offset, pointer(source), amount * sizeof(T))
     dest
 end
 
-function Base.copy!{T}(
+function copy!{T}(
         dest::CLArray{T}, d_offset::Integer,
         source::Array{T}, s_offset::Integer, amount::Integer
     )
     amount == 0 && return dest
-    q = global_queue(source)
-    cl.finish(q)
+    q = global_queue(dest)
     d_offset = (d_offset - 1) * sizeof(T)
-    buff = buffer(dest)
+    buff = pointer(dest)
     clT = eltype(buff)
     # element type has different padding from cl type in julia
     # for fixedsize arrays we use vload/vstore, so we can use it packed
@@ -55,45 +80,27 @@ function Base.copy!{T}(
         # depends a bit on the overhead of cl_writebuffer
         source = map(cl.packed_convert, source)
     end
-    cl_writebuffer(q, buff, unsigned(d_offset), Ref(source, s_offset), amount * sizeof(clT))
+    unsafe_copy!(q, buff, d_offset, Ref(source, s_offset), amount * sizeof(clT))
     dest
 end
 
 
-function Base.copy!{T}(
+function copy!{T}(
         dest::CLArray{T}, d_offset::Integer,
         src::CLArray{T}, s_offset::Integer, amount::Integer
     )
     amount == 0 && return dest
-    q = global_queue(source)
-    cl.finish(q)
+    q = global_queue(src)
     d_offset = (d_offset - 1) * sizeof(T)
     s_offset = (s_offset - 1) * sizeof(T)
-    cl.enqueue_copy_buffer(
-        q, buffer(src), buffer(dest),
-        Csize_t(amount * sizeof(T)), Csize_t(s_offset), Csize_t(d_offset),
-        nothing
+
+    n_evts  = UInt(0)
+    evt_ids = C_NULL
+    ret_evt = Ref{cl.CL_event}()
+    cl.@check cl.api.clEnqueueCopyBuffer(
+        q.id, pointer(src), pointer(dest),
+        s_offset, d_offset, amount * sizeof(T),
+        n_evts, evt_ids, ret_evt
     )
     dest
-end
-
-function (AT::Type{CLArray{T, N}})(
-        size::NTuple{N, Int};
-        ctx = global_context(),
-        flag = :rw, kw_args...
-    ) where {T, N}
-    # element type has different padding from cl type in julia
-    # for fixedsize arrays we use vload/vstore, so we can use it packed
-    clT = !Transpiler.is_fixedsize_array(T) ? cl.packed_convert(T) : T
-    buffsize = prod(size)
-    buff = buffsize == 0 ? cl.Buffer(clT, ctx, flag, 1) : cl.Buffer(clT, ctx, flag, buffsize)
-    CLArray{T, N}(buff, size)
-end
-
-function unsafe_reinterpret(::Type{T}, A::CLArray{ET}, size::Tuple) where {T, ET}
-    buff = buffer(A)
-    # TODO preserve!?
-    newbuff = cl.Buffer{T}(buff.id, true, prod(size))
-    ctx = global_context(A)
-    CLArray{T, N}(buff, size)
 end

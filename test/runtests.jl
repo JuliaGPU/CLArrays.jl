@@ -1,8 +1,18 @@
 using CLArrays
 using Base.Test
+import GPUArrays: gpu_call, linear_index
 
-# write your own tests here
-@test 1 == 2
+Ac = rand(Float32, 10, 10)
+A = CLArray(Ac);
+B = CLArray(Ac);
+
+Array(A .+ B) ≈ (Ac .+ Ac)
+
+function kernel(state, A)
+    idx = @(state, A)
+    A[idx] = 22f0
+    return
+end
 
 
 

@@ -1,50 +1,88 @@
-type CLContext <: Context
-    device::cl.Device
+import Base: show
+import GPUArrays: device
+
+
+struct CLContext
     context::cl.Context
+    device::cl.Device
     queue::cl.CmdQueue
-    function CLContext(device::cl.Device)
-        ctx = cl.Context(device)
-        queue = cl.CmdQueue(ctx)
-        new(device, ctx, queue)
-    end
 end
 
-is_opencl(ctx::CLContext) = true
-
-function Base.show(io::IO, ctx::CLContext)
+function show(io::IO, ctx::CLContext)
     println(io, "OpenCL context with:")
     println(io, "CL version: ", cl.info(ctx.device, :version))
     device_summary(io, ctx.device)
 end
 
+function CLContext(device::cl.Device)
+    context = cl.Context(device)
+    queue = cl.CmdQueue(context)
+    CLContext(context, device, queue)
+end
 
-global all_contexts, current_context, current_device
-let contexts = Dict{cl.Device, CLContext}(), active_device = cl.Device[]
+new_context(dev::cl.Device) = CLContext(dev)
+function default_device()
+    devs = sort(devices(), by = x-> !is_gpu(x))
+    if isempty(devs)
+        error("No OpenCL devices found")
+    end
+    first(devs)
+end
+
+global all_contexts, global_context, current_device, getcontext!
+
+global_context(A::CLArray) = context(A)
+
+global_queue(A::CLArray) = global_queue(context(A))
+
+function global_queue(cl_ctx::cl.Context)
+    getcontext!(cl_ctx).queue
+end
+
+function device(x::CLArray)
+    getcontext!(context(x)).device
+end
+
+
+let contexts = Dict{cl.Device, CLContext}(), active_device = cl.Device[], clcontext2context = Dict{cl.Context, CLContext}()
+    function getcontext!(ctx::cl.Context)
+        if haskey(clcontext2context, ctx)
+            return clcontext2context[ctx]
+        else
+            device = first(cl.devices(ctx))
+            getcontext!(device)
+        end
+    end
+    function getcontext!(device::cl.Device)
+        get!(contexts, device) do
+            ctx = new_context(device)
+            clcontext2context[ctx.context] = ctx
+            ctx
+        end
+    end
     all_contexts() = values(contexts)
     function current_device()
+        device = default_device()
         if isempty(active_device)
-            push!(active_device, CUDAnative.default_device[])
+            push!(active_device, device)
         end
         active_device[]
     end
-    function current_context()
-        dev = current_device()
-        get!(contexts, dev) do
-            new_context(dev)
-        end
+    function global_context()
+        device = current_device()
+        getcontext!(device).context
     end
-    function GPUArrays.init(dev::cl.Device)
-        GPUArrays.setbackend!(CLBackend)
+    function init(device::cl.Device)
         if isempty(active_device)
-            push!(active_device, dev)
+            push!(active_device, device)
         else
-            active_device[] = dev
+            active_device[] = device
         end
-        ctx = get!(()-> new_context(dev), contexts, dev)
+        ctx = get!(()-> new_context(device), contexts, device)
         ctx
     end
 
-    function GPUArrays.destroy!(context::CLContext)
+    function destroy!(context::CLContext)
         # don't destroy primary device context
         dev = context.device
         if haskey(contexts, dev) && contexts[dev] == context
@@ -55,6 +93,7 @@ let contexts = Dict{cl.Device, CLContext}(), active_device = cl.Device[]
     end
 end
 
+
 function reset!(context::CLContext)
     device = context.device
     finalize(context.context)
@@ -62,5 +101,3 @@ function reset!(context::CLContext)
     context.queue = cl.CmdQueue(context.context)
     return
 end
-
-new_context(dev::cl.Device) = CLContext(dev)
