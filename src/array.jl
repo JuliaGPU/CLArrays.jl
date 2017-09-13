@@ -5,8 +5,8 @@ import GPUArrays: GPUArray, unsafe_reinterpret, LocalMemory
 
 import Base: pointer, similar, size, convert, copy!
 
-mutable struct CLArray{T, N} <: GPUArray{T, N}
-    ptr::OwnedPtr{T}
+mutable struct CLArray{T, N, PtrT} <: GPUArray{T, N}
+    ptr::PtrT
     size::NTuple{N, Int}
 end
 

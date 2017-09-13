@@ -35,7 +35,7 @@ global_context(A::CLArray) = context(A)
 
 global_queue(A::CLArray) = global_queue(context(A))
 
-function global_queue(cl_ctx::cl.Context)
+function global_queue(cl_ctx::cl.Context = global_context())
     getcontext!(cl_ctx).queue
 end
 

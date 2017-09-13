@@ -8,42 +8,17 @@ B = CLArray(Ac);
 
 Array(A .+ B) ≈ (Ac .+ Ac)
 
-function kernel(state, A)
-    idx = @(state, A)
-    A[idx] = 22f0
+using CLArrays
+
+function test2(a, b)
+    a[Cuint(1), Cuint(1)] = b
     return
 end
 
+x = CLArray(rand(Float32, 32, 32))
+f = CLArrays.CLFunction(test2, (CLArray{Float32, 2}, Float32))
 
 
-@testset "Custom kernel from string function" begin
-    copy_source = """
-    __kernel void copy(
-            __global float *dest,
-            __global float *source
-        ){
-        int gid = get_global_id(0);
-        dest[gid] = source[gid];
-    }
-    """
-    source = GPUArray(rand(Float32, 1023, 11))
-    dest = GPUArray(zeros(Float32, size(source)))
-    f = (copy_source, :copy)
-    gpu_call(f, dest, (dest, source))
-    @test Array(dest) == Array(source)
-end
+contains, field_list = CLArrays.contains_tracked_type(CLArray{Float32, 2})
 
-using OpenCL
-device, ctx, queue = cl.create_compute_context()
-
-src = """
-struct test{
-    __global float * ptr;
-};
-typedef struct test Test;
-__kernel void copy(__global float *dest){
-    Test lol = {dest};
-}
-"""
-
-p = cl.Program(ctx, source=src) |> cl.build!
+typeof(x)
