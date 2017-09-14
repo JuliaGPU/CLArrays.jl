@@ -1,28 +1,72 @@
 using OpenCL, Transpiler
 
 import Transpiler: cli
+using Transpiler: GlobalPointer
 import GPUArrays: GPUArray, unsafe_reinterpret, LocalMemory, gpu_sub2ind
+using Sugar: to_tuple
 
 import Base: pointer, similar, size, copy!, convert
+using Base: RefValue
 
 # pointer MUST be a type parameter, to make it easier to replace it with a non pointer type for host upload
 mutable struct CLArray{T, N} <: GPUArray{T, N}
     ptr::OwnedPtr{T}
-    size::NTuple{N, Int}
+    size::NTuple{N, Cuint}
 end
 
-struct DeviceArray{T, N, Ptr}
+
+struct HostPtr{T}
+    ptr::Int32
+    (::Type{HostPtr{T}})() where T = new{T}(Int32(0))
+end
+Base.eltype(::Type{HostPtr{T}}) where T = T
+
+struct DeviceArray{T, N, Ptr} <: AbstractArray{T, N}
     ptr::Ptr
-    size::NTuple{N, Int}
+    size::NTuple{N, Cuint}
 end
 const PreDeviceArray{T, N} = DeviceArray{T, N, HostPtr{T}}
 const OnDeviceArray{T, N} = DeviceArray{T, N, GlobalPointer{T}}
 
-cl_convert(A::CLArray{T, N}) where {T, N} = DeviceArray{T, N}(HostPtr{T}(), A.size)
-reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) = OnDeviceArray{T, N}(ptr, x.size)
+kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(HostPtr{T}(), A.size)
+predevice_type(::Type{OnDeviceArray{T, N}}) where {T, N} = PreDeviceArray{T, N}
+device_type(::CLArray{T, N}) where {T, N} = OnDeviceArray{T, N}
+reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = OnDeviceArray{T, N}(ptr, x.size)
+
+kernel_convert(x::RefValue{T}) where T <: CLArray = RefValue(kernel_convert(x[]))
+predevice_type(::Type{RefValue{T}}) where T <: OnDeviceArray = RefValue{predevice_type(T)}
+device_type(x::RefValue{T}) where T <: CLArray = RefValue{device_type(x[])}
+reconstruct(x::RefValue{T}, ptr::GlobalPointer) where T <: PreDeviceArray = RefValue(reconstruct(x[], ptr))
+
+kernel_convert(x::Tuple) = kernel_convert.(x)
+predevice_type(::Type{T}) where T <: Tuple = Tuple{predevice_type.((T.parameters...))...}
+device_type(x::T) where T <: Tuple = Tuple{device_type.(x)...}
+
+@generated function reconstruct(x::Tuple, ptrs::GlobalPointer...)
+    ptrlist = to_tuple(ptrs)
+    tup = Expr(:tuple)
+    ptr_idx = 0
+    for (xi, T) in enumerate(to_tuple(x))
+        hasptr, fields = contains_pointer(T)
+        if hasptr
+            # consume the n pointers that T contains
+            ptr_args = ntuple(i-> :(ptrs[$(i + ptr_idx)]), length(fields))
+            ptr_idx += 1
+            push!(tup.args, :(reconstruct(x[$xi], $(ptr_args...))))
+        else
+            push!(tup.args, :(x[$xi]))
+        end
+    end
+    return tup
+end
 
 
-Base.size(x::OnDeviceArray) = Cuint.(x.size)
+Base.size(x::OnDeviceArray) = x.size
+
+
+function Base.getindex(x::Arr{T, N}, i::Vararg{Integer, N}) where {T, N}
+    return x.x[i...]
+end
 
 function Base.getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
     ilin = gpu_sub2ind(size(x), Cuint.(i))
@@ -43,8 +87,8 @@ function Base.getindex(x::OnDeviceArray, ilin::Integer)
 end
 # arguments are swapped to not override default constructor
 function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ptr::OwnedPtr{T}) where {T, N}
-    arr = CLArray{T, N, typeof(ptr)}(ptr, size)
-    #finalizer(arr, unsafe_free!)
+    arr = CLArray{T, N}(ptr, size)
+    finalizer(arr, unsafe_free!)
     arr
 end
 size(x::CLArray) = Int.(x.size)
@@ -62,17 +106,6 @@ function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context(
     arr
 end
 
-
-function convert(AT::Type{CLArray{T, N}}, A::DenseArray{T, N}) where {T, N}
-    copy!(AT(Base.size(A)), A)
-end
-function convert(::Type{CLArray{T1}}, A::DenseArray{T2, N}) where {T1, T2, N}
-    copy!(similar(CLArray, T1, size(A)), T1.(A))
-end
-function convert(::Type{CLArray}, A::DenseArray{T, N}) where {T, N}
-    println(T, " ", N, " ", CLArray)
-    copy!(similar(CLArray, T, size(A)), A)
-end
 
 similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArray{T, N}(size)
 

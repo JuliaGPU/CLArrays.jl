@@ -5,19 +5,9 @@ import GPUArrays: gpu_call, linear_index
 using Transpiler: CLMethod
 using Sugar: method_nargs, getslots!, isintrinsic, getcodeinfo!, sugared
 using Sugar: returntype, type_ast, rewrite_ast, newslot!, to_tuple
+using Sugar: isfunction
+
 using Base: tail
-
-struct HostPtr{T}
-    ptr::Int32
-    (::Type{HostPtr{T}})() where T = new{T}(Int32(0))
-end
-
-Base.eltype(::Type{HostPtr{T}}) where T = T
-
-const UploadArray{T, N} = CLArray{T, N, HostPtr{T}}
-
-Base.copy!{T}(dest::CLArray{T}, src::UploadArray{T}) = src
-Base.showarray(io::IO, ::UploadArray{T, N}, repr::Bool) where {T, N} = print(io, "DeviceArray{$T, $N}(...)")
 
 function gpu_call(f, A::CLArray, args::Tuple, blocks = nothing, thread = C_NULL)
     ctx = context(A)
@@ -38,28 +28,29 @@ function gpu_call(f, A::CLArray, args::Tuple, blocks = nothing, thread = C_NULL)
     clfunc(_args, blocks, thread)
 end
 
-#_to_cl_types{T}(::Type{T}) = T
-_to_cl_types{T}(::T) = replace_ptr_parameter(T)
-_to_cl_types{T}(::Type{T}) = Type{replace_ptr_parameter(T)}
-_to_cl_types(::Int64) = Int32
-_to_cl_types(::Float64) = Float32
-_to_cl_types{T}(x::LocalMemory{T}) = cli.LocalPointer{T}
-_to_cl_types(arg::Mem.OwnedPtr{T}) where T = cli.GlobalPointer{T}
 
-to_cl_types(args::Union{Vector, Tuple}) = _to_cl_types.(args)
-
-cl_convert(x::Int) = Int32(x)
-cl_convert(x::Float64) = Float32(x)
-cl_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
-cl_convert{T}(x::Mem.OwnedPtr{T}) = x
+device_type{T}(::T) = T
+device_type{T}(::Type{T}) = Type{T}
+device_type(::Int64) = Int32
+device_type(::Float64) = Float32
+device_type{T}(x::LocalMemory{T}) = cli.LocalPointer{T}
+device_type(arg::Mem.OwnedPtr{T}) where T = cli.GlobalPointer{T}
 
 
-function cl_convert(x)
+kernel_convert(x::Int) = Int32(x)
+kernel_convert(x::Float64) = Float32(x)
+kernel_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
+kernel_convert{T}(x::Mem.OwnedPtr{T}) = x
+
+
+
+
+function kernel_convert(x::T) where T
     contains, fields = contains_pointer(T)
     if contains
-        error("Contains pointers. Please define the correct cl_convert/reconstruct methods")
+        error("Contains pointers. Please define the correct kernel_convert/reconstruct methods")
     else
-        if (isbits(x) && sizeof(x) == 0 && nfields(x) == 0) || x <: Type
+        if (isbits(x) && sizeof(x) == 0 && nfields(x) == 0) || T <: Type
             return EmptyStruct()
         end
         isbits(T) || error("Only isbits types allowed for gpu kernel")
@@ -94,50 +85,9 @@ function getfield_expr(m::LazyMethod, T, name, fname)
     expr
 end
 
-function reconstruct(m, T, name, ptr_list, ptrtype = cli.GlobalPointer, hoisted = [])
-    if T <: HostPtr || T <: cli.GlobalPointer # when on host for kernel
-        length(ptr_list) == 1 && return (first(ptr_list[1]), hoisted)
-        throw(AssertionError("internal reconstruct error, $ptr_list has wrong length"))
-    elseif T <: OwnedPtr
-        @assert isempty(ptr_list) # we pass an empty ptr_list if we convert for kernel
-        return :(HostPtr{$(eltype(T))}()), hoisted
-    elseif nfields(T) == 0
-        return name, hoisted
-    else
-        constr = Expr(:new, replace_ptr_parameter(T, ptrtype))
-        for fname in fieldnames(T)
-            hoistname = gensym(string(fname))
-            FT = fieldtype(T, fname)
-            gfield = getfield_expr(m, FT, name, fname)
-            hoistslot = makeslot(m, FT, hoistname)
-            hasptr, list = contains_pointer(FT)
-            if hasptr || isa_pointer_type(FT)
-                current_ptr_list = match_field(ptr_list, fname)
-                _constr, list = reconstruct(m, FT, hoistname, current_ptr_list, ptrtype, hoisted)
-                push!(constr.args, _constr)
-                if isa(_constr, Expr) && _constr.head == :new # we need the hoist when its a real constructor
-                    idx_expr = getfield_expr(m, FT, name, fname)
-                    push!(hoisted, :($hoistslot = $idx_expr))
-                end
-            else
-                push!(constr.args, gfield)
-            end
-        end
-        return constr, hoisted
-    end
-end
 
 isa_pointer_type(T) = isa(T, Type) && (T <: OwnedPtr || T <: HostPtr || T <: cli.GlobalPointer)
 
-function parameter_contain_ptr(T)
-    isa(T, DataType) || return false
-    params = Sugar.to_tuple(T.parameters)
-    isempty(params) && return false
-    any(params) do param
-        isa_pointer_type(param) && return true
-        parameter_contain_ptr(param)
-    end
-end
 
 function contains_pointer(
         ::Type{T},
@@ -146,34 +96,19 @@ function contains_pointer(
     ) where T
     @assert isleaftype(T) "Arguments must be fully concrete (leaftypes)"
     # pointers must be in parameters
-    parameter_contain_ptr(T) || return false, pointer_fields
+    hasptr = false
     for fname in fieldnames(T)
         FT = fieldtype(T, fname)
         if isa_pointer_type(FT)
             push!(pointer_fields, (parent_field..., fname))
+            hasptr = true
         else
-            _hasptrfield, pointer_fields = contains_pointer(FT, (fname,), pointer_fields)
+            _hasptr, pointer_fields = contains_pointer(FT, (fname,), pointer_fields)
+            hasptr |= _hasptr
         end
     end
-    true, pointer_fields
+    hasptr, pointer_fields
 end
-
-@generated function replace_ptr_parameter(::Type{T}, ptrtyp::Type{PTRT} = cli.GlobalPointer) where {T,PTRT}
-    isleaftype(T) || return T
-    params = Sugar.to_tuple(T.parameters)
-    isempty(params) && return :($T)
-    parameters = map(params) do param
-        isa(param, Type) || return param
-        isa_pointer_type(param) && return PTRT{eltype(param)}
-        replace_ptr_parameter(param, PTRT)
-    end
-    tname = Base.typename(T)
-    tmod = getfield(tname, :module)
-    name = getfield(tname, :name)
-    :($tmod.$name{$(parameters...)})
-end
-
-
 
 get_fields_type(T, fields::Tuple{X}) where X = fieldtype(T, first(fields))
 get_fields_type(T, fields::Tuple{Vararg{Any, N}}) where N = get_fields_type(fieldtype(T, first(fields)), Base.tail(fields))
@@ -182,7 +117,6 @@ get_fields(x, fields::NTuple{1}) = getfield(x, first(fields))
 get_fields(x, fields::NTuple{N, Any}) where N = get_fields(getfield(x, first(fields)), Base.tail(fields))
 
 
-using Sugar: method_nargs, getslots!, isintrinsic, getcodeinfo!, sugared, returntype, type_ast, rewrite_ast, isfunction
 
 function _getast(x::CLMethod)
     if isfunction(x)
@@ -253,25 +187,26 @@ function assemble_kernel(m::CLMethod)
         if contains # type contains pointer to global memory
             # replace variable in arguments to free up slot
             fake_arg = gensym(name)
-            T̂ = replace_ptr_parameter(T, HostPtr) # get the pointer free equivalent type
+            T̂ = predevice_type(T) # get the pointer free equivalent type
             fake_arg_slot = newslot!(m, T̂, fake_arg)
             push!(m, T̂) # include in dependencies
             push!(kernel_args, :($fake_arg_slot::$T̂)) # put pointer free variant in kernel arguments
             push!(m.decls, fake_arg_slot)
             # we extract all pointers, pass them seperately and then assemble them in the function body
             ptr_fields = []
+            ptr_slots = []
             for (ptridx, fields) in enumerate(field_list)
                 ptr_arg = gensym(string("ptr_", ptridx, "_", name, arg_idx))
                 PT = get_fields_type(T, fields)
                 PT = cli.GlobalPointer{eltype(PT)}
                 ptr_slot = newslot!(m, PT, ptr_arg)
+                push!(ptr_slots, ptr_slot)
                 push!(kernel_ptrs, :($ptr_slot::$PT)) # add pointer to kernel arguments
                 push!(ptr_fields, (fields..., ptr_slot)) # add name of ptr to fields
                 push!(ptr_extract, (i, fields...))
             end
-            # get reconstruction constructor
-            constr, hoisted_fields = reconstruct(m, T̂, fake_arg_slot, ptr_fields)
-            append!(body.args, hoisted_fields)
+            constr = Expr(:call, reconstruct, fake_arg_slot, ptr_slots...)
+            constr.typ = T
             push!(body.args, :($argslot = $constr))
         else
             push!(m.decls, argslot)
@@ -316,7 +251,7 @@ end
 function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
     device = getcontext!(ctx).device
     version = cl_version(device)
-    cltypes = to_cl_types(args)
+    cltypes = device_type.(args)
     get!(compiled_functions, (ctx.id, f, cltypes)) do # TODO make this faster
         method = CLMethod((f, cltypes))
         source, fname, ptr_extract = assemble_kernel(method)
@@ -341,13 +276,13 @@ function (clf::CLFunction{F, Args, Ptrs})(
     kernel = clf.kernel
     idx = 1
     for elem in args
-        tmp = cl_convert(elem)
+        tmp = kernel_convert(elem)
         cl.set_arg!(kernel, idx, tmp)
         idx += 1
     end
     for fields in to_tuple(Ptrs)
         arg_idx, fields = first(fields), tail(fields)
-        cl.set_arg!(kernel, idx, cl_convert(get_fields(args[arg_idx], fields)))
+        cl.set_arg!(kernel, idx, kernel_convert(get_fields(args[arg_idx], fields)))
         idx += 1
     end
     ret_event = Ref{cl.CL_event}()
