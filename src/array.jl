@@ -1,22 +1,53 @@
 using OpenCL, Transpiler
 
 import Transpiler: cli
-import GPUArrays: GPUArray, unsafe_reinterpret, LocalMemory
+import GPUArrays: GPUArray, unsafe_reinterpret, LocalMemory, gpu_sub2ind
 
-import Base: pointer, similar, size, convert, copy!
+import Base: pointer, similar, size, copy!, convert
 
-mutable struct CLArray{T, N, PtrT} <: GPUArray{T, N}
-    ptr::PtrT
+# pointer MUST be a type parameter, to make it easier to replace it with a non pointer type for host upload
+mutable struct CLArray{T, N} <: GPUArray{T, N}
+    ptr::OwnedPtr{T}
     size::NTuple{N, Int}
 end
 
+struct DeviceArray{T, N, Ptr}
+    ptr::Ptr
+    size::NTuple{N, Int}
+end
+const PreDeviceArray{T, N} = DeviceArray{T, N, HostPtr{T}}
+const OnDeviceArray{T, N} = DeviceArray{T, N, GlobalPointer{T}}
+
+cl_convert(A::CLArray{T, N}) where {T, N} = DeviceArray{T, N}(HostPtr{T}(), A.size)
+reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) = OnDeviceArray{T, N}(ptr, x.size)
+
+
+Base.size(x::OnDeviceArray) = Cuint.(x.size)
+
+function Base.getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
+    ilin = gpu_sub2ind(size(x), Cuint.(i))
+    return x.ptr[ilin]
+end
+function Base.setindex!(x::OnDeviceArray{T, N}, val, i::Vararg{Integer, N}) where {T, N}
+    ilin = gpu_sub2ind(size(x), Cuint.(i))
+    x.ptr[ilin] = T(val)
+    return
+end
+function Base.setindex!(x::OnDeviceArray{T, N}, val, ilin::Integer) where {T, N}
+    x.ptr[ilin] = T(val)
+    return
+end
+
+function Base.getindex(x::OnDeviceArray, ilin::Integer)
+    return x.ptr[ilin]
+end
 # arguments are swapped to not override default constructor
 function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ptr::OwnedPtr{T}) where {T, N}
-    arr = CLArray{T, N}(ptr, size)
-    finalizer(arr, unsafe_free!)
+    arr = CLArray{T, N, typeof(ptr)}(ptr, size)
+    #finalizer(arr, unsafe_free!)
     arr
 end
-size(x::CLArray) = x.size
+size(x::CLArray) = Int.(x.size)
 pointer(x::CLArray) = x.ptr
 context(p::CLArray) = context(pointer(p))
 
@@ -31,10 +62,19 @@ function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context(
     arr
 end
 
+
+function convert(AT::Type{CLArray{T, N}}, A::DenseArray{T, N}) where {T, N}
+    copy!(AT(Base.size(A)), A)
+end
+function convert(::Type{CLArray{T1}}, A::DenseArray{T2, N}) where {T1, T2, N}
+    copy!(similar(CLArray, T1, size(A)), T1.(A))
+end
+function convert(::Type{CLArray}, A::DenseArray{T, N}) where {T, N}
+    println(T, " ", N, " ", CLArray)
+    copy!(similar(CLArray, T, size(A)), A)
+end
+
 similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArray{T, N}(size)
-
-
-
 
 function unsafe_free!(a::CLArray)
     ptr = pointer(a)
