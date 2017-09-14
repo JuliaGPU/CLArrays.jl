@@ -1,4 +1,4 @@
-# Never felt more like a hacker. This hack will go away once CLBLAS doesn't
+# This hack will go away once CLBLAS doesn't
 # rely on the clunky cl.CLArray type in OpenCL anymore. Sadly, we need cl.Buffer for that, which  overwrites the default
 # constructor registering a finalizer, which we don't want here, so we need to
 # get the real constructor.
@@ -68,12 +68,8 @@ function *(plan::CLFFTPlan{Direction, false, T, N}, A::CLArray{T, N}) where {T, 
     y
 end
 
-
+# Enable BLAS support via GPUArrays
 import CLBLAS
-import GPUArrays: blas_module, hasblas, blasbuffer
+import GPUArrays: blas_module, blasbuffer
 blas_module(::CLArray) = CLBLAS
-hasblas(::CLContext) = true
-
-
-
 blasbuffer(A::CLArray) = cl.CLArray(clbuffer(A), global_queue(A), size(A))

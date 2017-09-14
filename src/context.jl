@@ -42,6 +42,10 @@ end
 function device(x::CLArray)
     getcontext!(context(x)).device
 end
+function device(x::cl.Context)
+    getcontext!(x).device
+end
+
 
 
 let contexts = Dict{cl.Device, CLContext}(), active_device = cl.Device[], clcontext2context = Dict{cl.Context, CLContext}()

@@ -5,6 +5,8 @@ module Mem
 import ..CLArrays: context
 using OpenCL
 import Base: pointer, eltype, cconvert, convert, unsafe_copy!
+using GPUArrays: supports_double, device
+using GPUArrays
 
 immutable OwnedPtr{T}
     ptr::cl.CL_mem
@@ -32,6 +34,10 @@ function free(p::OwnedPtr)
 end
 
 function alloc(T, elems::Integer, ctx::cl.Context, flags = cl.CL_MEM_READ_WRITE)
+    dev = GPUArrays.device(ctx)
+    if T == Float64 && !supports_double(dev)
+        error("Float64 is not supported by your device: $dev. Make sure to convert all types for the GPU to Float32")
+    end
     err_code = Ref{cl.CL_int}()
     mem_id = cl.api.clCreateBuffer(
         ctx.id, flags, cl.cl_uint(elems * sizeof(T)),

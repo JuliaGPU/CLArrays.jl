@@ -11,18 +11,11 @@ using Base: tail
 
 function gpu_call(f, A::CLArray, args::Tuple, blocks = nothing, thread = C_NULL)
     ctx = context(A)
-    _args = if !isa(f, Tuple{String, Symbol})
-        (KernelState(), args...) # CLArrays "state"
-    else
-        args
-    end
+    _args = (KernelState(), args...) # CLArrays "state"
     clfunc = CLFunction(f, _args, ctx)
     if blocks == nothing
         blocks, thread = thread_blocks_heuristic(length(A))
-        blocks = (blocks,)
-        thread = (thread,)
-    end
-    if isa(blocks, Integer)
+    elseif isa(blocks, Integer)
         blocks = (blocks,)
     end
     clfunc(_args, blocks, thread)
@@ -31,19 +24,11 @@ end
 
 device_type{T}(::T) = T
 device_type{T}(::Type{T}) = Type{T}
-device_type(::Int64) = Int32
-device_type(::Float64) = Float32
 device_type{T}(x::LocalMemory{T}) = cli.LocalPointer{T}
 device_type(arg::Mem.OwnedPtr{T}) where T = cli.GlobalPointer{T}
 
-
-kernel_convert(x::Int) = Int32(x)
-kernel_convert(x::Float64) = Float32(x)
 kernel_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
 kernel_convert{T}(x::Mem.OwnedPtr{T}) = x
-
-
-
 
 function kernel_convert(x::T) where T
     contains, fields = contains_pointer(T)
@@ -57,8 +42,6 @@ function kernel_convert(x::T) where T
         return x
     end
 end
-
-
 
 function match_field(field_list, field)
     for elem in field_list
@@ -243,13 +226,15 @@ function empty_compile_cache!()
     return
 end
 
-
 immutable CLFunction{F, Args, Ptrs}
     kernel::cl.Kernel
 end
 
 function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
     device = getcontext!(ctx).device
+    if !supports_double(device) && any(x-> isa(x, Float64), args)
+        error("Float64 is not supported by your device: $device. Make sure to convert all types for the GPU to Float32")
+    end
     version = cl_version(device)
     cltypes = device_type.(args)
     get!(compiled_functions, (ctx.id, f, cltypes)) do # TODO make this faster
@@ -293,24 +278,3 @@ function (clf::CLFunction{F, Args, Ptrs})(
     )
     return cl.Event(ret_event[], retain = false)
 end
-
-
-#
-# function kernel_call_function(kernel, kernel_setup)
-#     @eval begin
-#         function (args, blocks::NTuple{N, Integer}, threads, queue = global_queue()) where N
-#             @assert N in (1, 2, 3) "invalid block size"
-#             gsize = Csize_t[b for b in blocks]
-#             lsize = isa(threads, Tuple) ? Csize_t[threads[i] for i=1:length(blocks)] : threads
-#             kernel = $kernel
-#             $(kernel_setup...)
-#             ret_event = Ref{cl.CL_event}()
-#             cl.@check cl.api.clEnqueueNDRangeKernel(
-#                 queue.id, kernel.id,
-#                 length(gsize), C_NULL, gsize, lsize,
-#                 0, C_NULL, ret_event
-#             )
-#             return cl.Event(ret_event[], retain = false)
-#         end
-#     end
-# end

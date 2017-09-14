@@ -64,10 +64,6 @@ end
 Base.size(x::OnDeviceArray) = x.size
 
 
-function Base.getindex(x::Arr{T, N}, i::Vararg{Integer, N}) where {T, N}
-    return x.x[i...]
-end
-
 function Base.getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
     ilin = gpu_sub2ind(size(x), Cuint.(i))
     return x.ptr[ilin]
@@ -102,8 +98,7 @@ function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context(
     elems = prod(size)
     elems = elems == 0 ? 1 : elems # OpenCL can't allocate 0 sized buffers
     ptr = Mem.alloc(clT, elems, ctx)
-    arr = CLArray{clT, N}(size, ptr)
-    arr
+    CLArray{clT, N}(size, ptr)
 end
 
 
@@ -111,11 +106,11 @@ similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArra
 
 function unsafe_free!(a::CLArray)
     ptr = pointer(a)
-    if !cl.is_ctx_id_alive(context(ptr).id)
-        #TODO logging that we don't free since context is not alive
-    else
+    ctxid = context(ptr).id
+    if cl.is_ctx_id_alive(ctxid) && ctxid != C_NULL
         Mem.free(ptr)
     end
+    #TODO logging that we don't free since context is not alive
 end
 
 function unsafe_reinterpret(::Type{T}, A::CLArray{ET}, size::NTuple{N, Integer}) where {T, ET, N}

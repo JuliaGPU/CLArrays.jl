@@ -1,4 +1,5 @@
-import GPUArrays: is_gpu, is_cpu, name, threads, blocks, global_memory, local_memory
+import GPUArrays: is_gpu, is_cpu, name, threads, blocks, global_memory
+import GPUArrays: supports_double, local_memory
 
 function devices()
     filter(cl.devices()) do dev
@@ -26,3 +27,13 @@ blocks(dev::cl.Device) = cl.info(dev, :max_work_item_size)
 
 global_memory(dev::cl.Device) = cl.info(dev, :global_mem_size) |> Int
 local_memory(dev::cl.Device) = cl.info(dev, :local_mem_size) |> Int
+
+function supports_double(dev::cl.Device)
+    result = Ref{cl.CL_uint}()
+    cl.@check cl.api.clGetDeviceInfo(
+        dev.id, cl.CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE,
+        sizeof(cl.CL_uint), result,
+        C_NULL
+    )
+    result[] != 0
+end
