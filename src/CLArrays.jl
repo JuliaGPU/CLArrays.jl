@@ -11,13 +11,13 @@ function context end
 
 include("memory.jl")
 include("array.jl")
+include("ondevice.jl")
 include("device.jl")
 include("context.jl")
 include("intrinsics.jl")
 include("compilation.jl")
 include("mapreduce.jl")
 include("3rdparty.jl")
-include("device_funcs.jl")
 
 export CLArray
 

@@ -8,79 +8,12 @@ using Sugar: to_tuple
 import Base: pointer, similar, size, copy!, convert
 using Base: RefValue
 
-# pointer MUST be a type parameter, to make it easier to replace it with a non pointer type for host upload
 mutable struct CLArray{T, N} <: GPUArray{T, N}
     ptr::OwnedPtr{T}
     size::NTuple{N, Cuint}
 end
 
 
-struct HostPtr{T}
-    ptr::Int32
-    (::Type{HostPtr{T}})() where T = new{T}(Int32(0))
-end
-Base.eltype(::Type{HostPtr{T}}) where T = T
-
-struct DeviceArray{T, N, Ptr} <: AbstractArray{T, N}
-    ptr::Ptr
-    size::NTuple{N, Cuint}
-end
-const PreDeviceArray{T, N} = DeviceArray{T, N, HostPtr{T}}
-const OnDeviceArray{T, N} = DeviceArray{T, N, GlobalPointer{T}}
-
-kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(HostPtr{T}(), A.size)
-predevice_type(::Type{OnDeviceArray{T, N}}) where {T, N} = PreDeviceArray{T, N}
-device_type(::CLArray{T, N}) where {T, N} = OnDeviceArray{T, N}
-reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = OnDeviceArray{T, N}(ptr, x.size)
-
-kernel_convert(x::RefValue{T}) where T <: CLArray = RefValue(kernel_convert(x[]))
-predevice_type(::Type{RefValue{T}}) where T <: OnDeviceArray = RefValue{predevice_type(T)}
-device_type(x::RefValue{T}) where T <: CLArray = RefValue{device_type(x[])}
-reconstruct(x::RefValue{T}, ptr::GlobalPointer) where T <: PreDeviceArray = RefValue(reconstruct(x[], ptr))
-
-kernel_convert(x::Tuple) = kernel_convert.(x)
-predevice_type(::Type{T}) where T <: Tuple = Tuple{predevice_type.((T.parameters...))...}
-device_type(x::T) where T <: Tuple = Tuple{device_type.(x)...}
-
-@generated function reconstruct(x::Tuple, ptrs::GlobalPointer...)
-    ptrlist = to_tuple(ptrs)
-    tup = Expr(:tuple)
-    ptr_idx = 0
-    for (xi, T) in enumerate(to_tuple(x))
-        hasptr, fields = contains_pointer(T)
-        if hasptr
-            # consume the n pointers that T contains
-            ptr_args = ntuple(i-> :(ptrs[$(i + ptr_idx)]), length(fields))
-            ptr_idx += 1
-            push!(tup.args, :(reconstruct(x[$xi], $(ptr_args...))))
-        else
-            push!(tup.args, :(x[$xi]))
-        end
-    end
-    return tup
-end
-
-
-Base.size(x::OnDeviceArray) = x.size
-
-
-function Base.getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
-    ilin = gpu_sub2ind(size(x), Cuint.(i))
-    return x.ptr[ilin]
-end
-function Base.setindex!(x::OnDeviceArray{T, N}, val, i::Vararg{Integer, N}) where {T, N}
-    ilin = gpu_sub2ind(size(x), Cuint.(i))
-    x.ptr[ilin] = T(val)
-    return
-end
-function Base.setindex!(x::OnDeviceArray{T, N}, val, ilin::Integer) where {T, N}
-    x.ptr[ilin] = T(val)
-    return
-end
-
-function Base.getindex(x::OnDeviceArray, ilin::Integer)
-    return x.ptr[ilin]
-end
 # arguments are swapped to not override default constructor
 function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ptr::OwnedPtr{T}) where {T, N}
     arr = CLArray{T, N}(ptr, size)
