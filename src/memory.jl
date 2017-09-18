@@ -5,7 +5,7 @@ module Mem
 import ..CLArrays: context
 using OpenCL
 import Base: pointer, eltype, cconvert, convert, unsafe_copy!
-using GPUArrays: supports_double, device
+using GPUArrays: supports_double, device, global_memory
 using GPUArrays
 
 immutable OwnedPtr{T}
@@ -28,9 +28,28 @@ function retain(p::OwnedPtr)
     return
 end
 
+
+
+
+const current_allocated_mem = Ref(0)
 function free(p::OwnedPtr)
     cl.@check_release cl.api.clReleaseMemObject(p)
     return
+end
+
+function pressure_gc!(device, bytes)
+    # If we used up 80% of our device. lets free see if we can free stuff with a gc swipe.
+    # try three times, first only with a an unforced swipe
+    mem = current_allocated_mem[] + bytes
+    if (global_memory(device) * 0.8) < mem
+        println("calling unforced gc")
+        gc(false) # non force
+    end
+    if (global_memory(device) * 0.8) < mem
+        println("force swipe")
+        gc() # non forced
+    end
+    current_allocated_mem[] += bytes
 end
 
 function alloc(T, elems::Integer, ctx::cl.Context, flags = cl.CL_MEM_READ_WRITE)
@@ -38,9 +57,11 @@ function alloc(T, elems::Integer, ctx::cl.Context, flags = cl.CL_MEM_READ_WRITE)
     if T == Float64 && !supports_double(dev)
         error("Float64 is not supported by your device: $dev. Make sure to convert all types for the GPU to Float32")
     end
+    nbytes = cl.cl_uint(elems * sizeof(T))
+    pressure_gc!(dev, nbytes)
     err_code = Ref{cl.CL_int}()
     mem_id = cl.api.clCreateBuffer(
-        ctx.id, flags, cl.cl_uint(elems * sizeof(T)),
+        ctx.id, flags, nbytes,
         C_NULL,
         err_code
     )
