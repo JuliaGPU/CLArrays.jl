@@ -34,6 +34,8 @@ function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context(
     CLArray{clT, N}(size, ptr)
 end
 
+raw_print(msg::AbstractString...) =
+    ccall(:write, Cssize_t, (Cint, Cstring, Csize_t), 1, join(msg), length(join(msg)))
 
 similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArray{T, N}(size)
 
@@ -42,6 +44,7 @@ function unsafe_free!(a::CLArray)
     ctxid = context(ptr).id
     if cl.is_ctx_id_alive(ctxid) && ctxid != C_NULL
         Mem.free(ptr)
+        Mem.current_allocated_mem[] -= sizeof(eltype(a)) * length(a)
     end
     #TODO logging that we don't free since context is not alive
 end

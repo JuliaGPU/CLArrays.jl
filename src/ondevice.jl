@@ -26,20 +26,22 @@ start(x::OnDeviceArray) = Cuint(1)
 next(x::OnDeviceArray, state::Cuint) = x[state], state + Cuint(1)
 done(x::OnDeviceArray, state::Cuint) = state > length(x)
 
+getindex(x::OnDeviceArray, ilin::Integer) =  x.ptr[ilin]
 function getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
     ilin = gpu_sub2ind(size(x), Cuint.(i))
     return x.ptr[ilin]
-end
-function setindex!(x::OnDeviceArray{T, N}, val, i::Vararg{Integer, N}) where {T, N}
-    ilin = gpu_sub2ind(size(x), Cuint.(i))
-    x.ptr[ilin] = T(val)
-    return
 end
 function setindex!(x::OnDeviceArray{T, N}, val, ilin::Integer) where {T, N}
     x.ptr[ilin] = T(val)
     return
 end
-getindex(x::OnDeviceArray, ilin::Integer) =  x.ptr[ilin]
+
+function setindex!(x::OnDeviceArray{T, N}, val, i::Vararg{Integer, N}) where {T, N}
+    ilin = gpu_sub2ind(size(x), Cuint.(i))
+    x.ptr[ilin] = T(val)
+    return
+end
+
 
 
 kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(HostPtr{T}(), A.size)

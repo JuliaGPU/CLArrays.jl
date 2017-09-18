@@ -19,6 +19,6 @@ include("compilation.jl")
 include("mapreduce.jl")
 include("3rdparty.jl")
 
-export CLArray
+export CLArray, gpu_call
 
 end # module

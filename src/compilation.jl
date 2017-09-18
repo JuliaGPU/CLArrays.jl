@@ -161,6 +161,15 @@ function assemble_kernel(m::CLMethod)
     kernel_ptrs = []
     body = Expr(:block)
     nargs = method_nargs(m)
+    # declare rest of slots
+    for (i, (T, name)) in enumerate(getslots!(m)[nargs+1:end])
+        slot = TypedSlot(i + nargs, T)
+        push!(m.decls, slot)
+        push!(m, T)
+        tmp = :($name::$T)
+        tmp.typ = T
+        push!(body.args, tmp)
+    end
     st = getslots!(m)[2:nargs] # don't include self
     arg_idx = 1
     ptr_extract = []
@@ -196,6 +205,7 @@ function assemble_kernel(m::CLMethod)
             push!(kernel_args, :($argslot::$T))
         end
     end
+
     append!(kernel_args, kernel_ptrs)
     real_body = _getast(m)
     body.typ = real_body.typ # use real type
