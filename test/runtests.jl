@@ -7,6 +7,7 @@ if (
     Pkg.checkout("Transpiler", "sd/struct_buffer")
     Pkg.checkout("Sugar", "sd/struct_buffer")
     Pkg.checkout("GPUArrays", "sd/abstractgpu")
+    Pkg.checkout("OpenCL", "sd/pointerfree")
 end
 
 using CLArrays
