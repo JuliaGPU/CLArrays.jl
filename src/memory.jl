@@ -24,8 +24,8 @@ function convert{T}(::Type{OwnedPtr{T}}, p::OwnedPtr)
 end
 
 function retain(p::OwnedPtr)
-    cl.@check cl.api.clRetainMemObject(p)
-    return
+    err = cl.api.clRetainMemObject(p)
+    return err
 end
 
 
@@ -33,8 +33,7 @@ end
 
 const current_allocated_mem = Ref(0)
 function free(p::OwnedPtr)
-    cl.@check_release cl.api.clReleaseMemObject(p)
-    return
+    cl.api.clReleaseMemObject(p)
 end
 
 function pressure_gc!(device, bytes)

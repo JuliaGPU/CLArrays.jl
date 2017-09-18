@@ -42,11 +42,14 @@ similar(::Type{<: CLArray}, ::Type{T}, size::Base.Dims{N}) where {T, N} = CLArra
 function unsafe_free!(a::CLArray)
     ptr = pointer(a)
     ctxid = context(ptr).id
-    if cl.is_ctx_id_alive(ctxid) && ctxid != C_NULL
-        Mem.free(ptr)
+    err = Mem.free(ptr)
+    if err == cl.CL_SUCCESS
         Mem.current_allocated_mem[] -= sizeof(eltype(a)) * length(a)
+    elseif err == cl.CL_INVALID_CONTEXT
+        # ignore (log it!)
+    else
+        cl.@check err
     end
-    #TODO logging that we don't free since context is not alive
 end
 
 function unsafe_reinterpret(::Type{T}, A::CLArray{ET}, size::NTuple{N, Integer}) where {T, ET, N}
