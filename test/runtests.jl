@@ -15,6 +15,10 @@ if (
 end
 
 using CLArrays
-using GPUArrays.TestSuite
-
-TestSuite.run_tests(CLArray)
+using GPUArrays.TestSuite, Base.Test
+for dev in CLArrays.devices()
+    CLArrays.init(dev)
+    @testset "Device: $dev" begin
+        TestSuite.run_tests(CLArray)
+    end
+end
