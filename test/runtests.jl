@@ -15,6 +15,6 @@ if (
 end
 
 using CLArrays
-using GPUArrays.TestSuite, Base.Test
+using GPUArrays.TestSuite
 
 TestSuite.run_tests(CLArray)
