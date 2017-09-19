@@ -3,8 +3,7 @@ if (
         get(ENV, "APPVEYOR", "") == "true" ||
         get(ENV, "CI", "") == "true"
     )
-    Pkg.clone("OpenCL")
-    Pkg.clone("Suger")
+    Pkg.clone("Sugar")
     Pkg.clone("Transpiler")
     Pkg.clone("GPUArrays")
 
