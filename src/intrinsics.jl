@@ -32,5 +32,5 @@ end
 global_size(state::KernelState) = get_global_size(0)
 linear_index(state::KernelState) = get_global_id(0) + Cuint(1)
 
-
 synchronize_threads(::KernelState) = cli.barrier(CLK_LOCAL_MEM_FENCE)
+LocalMemory(state::KernelState, T, N) = Transpiler.cli.LocalPointer{T}()

@@ -1,5 +1,9 @@
 import Base: setindex!, getindex, size, IndexStyle, next, done, start, sum, eltype
 using Base: IndexLinear
+using Transpiler.cli: LocalPointer
+import GPUArrays: LocalMemory
+
+
 """
 Array type on the device
 """
@@ -18,7 +22,10 @@ struct HostPtr{T}
 end
 eltype(::Type{HostPtr{T}}) where T = T
 const PreDeviceArray{T, N} = DeviceArray{T, N, HostPtr{T}} # Pointer free variant for kernel upload
-const OnDeviceArray{T, N} = DeviceArray{T, N, GlobalPointer{T}} # Variant on the device containing the correct pointer
+const GlobalArray{T, N} = DeviceArray{T, N, GlobalPointer{T}}
+const LocalArray{T, N} = DeviceArray{T, N, LocalPointer{T}}
+
+const OnDeviceArray{T, N} = Union{GlobalArray{T, N}, LocalArray{T, N}} # Variant on the device containing the correct pointer
 
 size(x::OnDeviceArray) = x.size
 IndexStyle(::OnDeviceArray) = IndexLinear()
@@ -45,13 +52,13 @@ end
 
 
 kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(HostPtr{T}(), A.size)
-predevice_type(::Type{OnDeviceArray{T, N}}) where {T, N} = PreDeviceArray{T, N}
-device_type(::CLArray{T, N}) where {T, N} = OnDeviceArray{T, N}
-reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = OnDeviceArray{T, N}(ptr, x.size)
+predevice_type(::Type{GlobalArray{T, N}}) where {T, N} = PreDeviceArray{T, N}
+device_type(::CLArray{T, N}) where {T, N} = GlobalArray{T, N}
+reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = GlobalArray{T, N}(ptr, x.size)
 
 # some converts to inline CLArrays into tuples and refs
 kernel_convert(x::RefValue{T}) where T <: CLArray = RefValue(kernel_convert(x[]))
-predevice_type(::Type{RefValue{T}}) where T <: OnDeviceArray = RefValue{predevice_type(T)}
+predevice_type(::Type{RefValue{T}}) where T <: GlobalArray = RefValue{predevice_type(T)}
 device_type(x::RefValue{T}) where T <: CLArray = RefValue{device_type(x[])}
 reconstruct(x::RefValue{T}, ptr::GlobalPointer) where T <: PreDeviceArray = RefValue(reconstruct(x[], ptr))
 
@@ -76,7 +83,6 @@ device_type(x::T) where T <: Tuple = Tuple{device_type.(x)...}
     end
     return tup
 end
-
 
 
 function sum(A::CLArrays.DeviceArray{T}) where T
