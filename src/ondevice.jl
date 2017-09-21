@@ -1,13 +1,19 @@
-import Base: setindex!, getindex, size, IndexStyle, next, done, start, sum, eltype
+import Base: setindex!, getindex, size, IndexStyle, sum, eltype
 using Base: IndexLinear
+
 using Transpiler.cli: LocalPointer
+using Transpiler.cli: get_local_id, get_global_id, barrier,  CLK_LOCAL_MEM_FENCE
+using Transpiler.cli: get_local_size, get_global_size, get_group_id, get_num_groups
+import GPUArrays: synchronize, synchronize_threads, device, global_size, linear_index
+
 import GPUArrays: LocalMemory
+using GPUArrays: AbstractDeviceArray
 
 
 """
 Array type on the device
 """
-struct DeviceArray{T, N, Ptr} <: AbstractArray{T, N}
+struct DeviceArray{T, N, Ptr} <: AbstractDeviceArray{T, N}
     ptr::Ptr
     size::NTuple{N, Cuint}
 end
@@ -27,11 +33,7 @@ const LocalArray{T, N} = DeviceArray{T, N, LocalPointer{T}}
 
 const OnDeviceArray{T, N} = Union{GlobalArray{T, N}, LocalArray{T, N}} # Variant on the device containing the correct pointer
 
-size(x::OnDeviceArray) = x.size
-IndexStyle(::OnDeviceArray) = IndexLinear()
-start(x::OnDeviceArray) = Cuint(1)
-next(x::OnDeviceArray, state::Cuint) = x[state], state + Cuint(1)
-done(x::OnDeviceArray, state::Cuint) = state > length(x)
+size(x::DeviceArray) = x.size
 
 getindex(x::OnDeviceArray, ilin::Integer) =  x.ptr[ilin]
 function getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}
@@ -85,10 +87,44 @@ device_type(x::T) where T <: Tuple = Tuple{device_type.(x)...}
 end
 
 
-function sum(A::CLArrays.DeviceArray{T}) where T
-    acc = zero(T)
-    for elem in A
-        acc += elem
+#synchronize
+function synchronize(x::CLArray)
+    cl.finish(global_queue(x)) # TODO figure out the diverse ways of synchronization
+end
+
+
+immutable KernelState
+    empty::Int32
+    KernelState() = new(Int32(0))
+end
+
+for (i, sym) in enumerate((:x, :y, :z))
+    for (f, fcl, isidx) in (
+            (:blockidx, get_group_id, true),
+            (:blockdim, get_local_size, false),
+            (:threadidx, get_local_id, true),
+            (:griddim, get_num_groups, false)
+        )
+
+        fname = Symbol(string(f, '_', sym))
+        if isidx
+            @eval GPUArrays.$fname(::KernelState)::Cuint = $fcl($(i-1)) + Cuint(1)
+        else
+            @eval GPUArrays.$fname(::KernelState)::Cuint = $fcl($(i-1))
+        end
     end
-    acc
+end
+
+global_size(state::KernelState) = get_global_size(0)
+linear_index(state::KernelState) = get_global_id(0) + Cuint(1)
+
+synchronize_threads(::KernelState) = cli.barrier(CLK_LOCAL_MEM_FENCE)
+
+LocalMemory(state::KernelState, ::Type{T}, ::Val{N}, ::Val{C}) where {T, N, C} = Transpiler.cli.LocalPointer{T}()
+
+function (::Type{AbstractDeviceArray})(ptr::PtrT, shape::Vararg{Integer, N}) where PtrT <: Transpiler.cli.LocalPointer{T} where {T, N}
+    DeviceArray{T, N, PtrT}(ptr, shape)
+end
+function (::Type{AbstractDeviceArray})(ptr::PtrT, shape::NTuple{N, Integer}) where PtrT <: Transpiler.cli.LocalPointer{T} where {T, N}
+    DeviceArray{T, N, PtrT}(ptr, shape)
 end

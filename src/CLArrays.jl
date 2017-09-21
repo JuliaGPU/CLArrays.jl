@@ -14,7 +14,6 @@ include("array.jl")
 include("ondevice.jl")
 include("device.jl")
 include("context.jl")
-include("intrinsics.jl")
 include("compilation.jl")
 include("3rdparty.jl")
 

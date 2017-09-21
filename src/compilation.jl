@@ -1,7 +1,7 @@
 using OpenCL: cl
 using Transpiler: CLMethod, EmptyStruct
 using Sugar
-import GPUArrays: gpu_call, linear_index
+import GPUArrays: _gpu_call, linear_index
 using Transpiler: CLMethod
 using Sugar: method_nargs, getslots!, isintrinsic, getcodeinfo!, sugared
 using Sugar: returntype, type_ast, rewrite_ast, newslot!, to_tuple
@@ -9,16 +9,15 @@ using Sugar: isfunction
 
 using Base: tail
 
-function gpu_call(f, A::CLArray, args::Tuple, blocks = nothing, thread = C_NULL)
+
+
+function _gpu_call(f, A::CLArray, args::Tuple, blocks_threads::Tuple{T, T}) where T <: NTuple{N, Integer} where N
     ctx = context(A)
     _args = (KernelState(), args...) # CLArrays "state"
     clfunc = CLFunction(f, _args, ctx)
-    if blocks == nothing
-        blocks, thread = thread_blocks_heuristic(length(A))
-    elseif isa(blocks, Integer)
-        blocks = (blocks,)
-    end
-    clfunc(_args, blocks, thread)
+    blocks, threads = blocks_threads
+    global_size = blocks .* threads
+    clfunc(_args, global_size, threads)
 end
 
 
