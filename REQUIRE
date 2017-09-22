@@ -9,6 +9,6 @@ ColorTypes
 #Sugar 0.3
 Matcha 0.0.2
 
-#OpenCL 0.6.0 #proper packed conversion
+OpenCL 0.6.1 #proper packed pointer free
 CLBLAS 1.1.0
 CLFFT 0.4.0 # 0.5.0
