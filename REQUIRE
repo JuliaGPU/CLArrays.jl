@@ -5,8 +5,8 @@ julia 0.6
 StaticArrays
 ColorTypes
 
-#Transpiler 0.3
-#Sugar 0.3
+Transpiler 0.4
+Sugar 0.4
 Matcha 0.0.2
 
 OpenCL 0.6.1 #proper packed pointer free
