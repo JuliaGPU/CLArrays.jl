@@ -9,7 +9,7 @@ To learn how to use it, please refer to the GPUArray documentations:
 
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://JuliaGPU.github.io/GPUArrays.jl/latest)
 
-The only noteworthy interface that isn't mentioned in GPUArrays is how to select and initialize devices:
+The only noteworthy functionality that isn't part of the GPUArray interface is how to select and initialize devices:
 
 ```Julia
 using CLArrays
