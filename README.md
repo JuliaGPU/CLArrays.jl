@@ -4,7 +4,7 @@ Implementation of the [abstract GPU Array Interface](https://github.com/JuliaGPU
 
 CLArray uses [Transpiler.jl](https://github.com/SimonDanisch/Transpiler.jl) to compile Julia functions for the GPU using OpenCL.
 
-It implements the full abstract gpu interface in GPUArrays.
+It implements the full abstract gpu interface from GPUArrays.
 To learn how to use it, please refer to the GPUArray documentations:
 
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://JuliaGPU.github.io/GPUArrays.jl/latest)
