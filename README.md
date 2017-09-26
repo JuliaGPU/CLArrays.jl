@@ -1,5 +1,8 @@
 # CLArrays
 
+
+[![](http://ci.maleadt.net/shields/build.php?builder=CLArrays-julia06-x86-64bit&name=julia%200.6)](http://ci.maleadt.net/shields/url.php?builder=CLArrays-julia06-x86-64bit)
+
 Implementation of the [abstract GPU Array Interface](https://github.com/JuliaGPU/GPUArrays.jl)
 
 CLArray uses [Transpiler.jl](https://github.com/SimonDanisch/Transpiler.jl) to compile Julia functions for the GPU using OpenCL.
