@@ -3,7 +3,7 @@ sudo: false
 
 os:
   - linux
-  - osx
+  #- osx
 
 julia:
   - 0.6

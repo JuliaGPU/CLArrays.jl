@@ -11,7 +11,7 @@ end
 function show(io::IO, ctx::CLContext)
     println(io, "OpenCL context with:")
     println(io, "CL version: ", cl.info(ctx.device, :version))
-    device_summary(io, ctx.device)
+    GPUArrays.device_summary(io, ctx.device)
 end
 
 function CLContext(device::cl.Device)
@@ -47,7 +47,7 @@ function device(x::cl.Context)
 end
 
 
-
+global init
 let contexts = Dict{cl.Device, CLContext}(), active_device = cl.Device[], clcontext2context = Dict{cl.Context, CLContext}()
     function getcontext!(ctx::cl.Context)
         if haskey(clcontext2context, ctx)
