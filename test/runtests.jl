@@ -1,12 +1,3 @@
-if (
-        get(ENV, "TRAVIS", "") == "true" ||
-        get(ENV, "APPVEYOR", "") == "true" ||
-        get(ENV, "CI", "") == "true"
-    )
-    Pkg.clone("GPUArrays")
-    Pkg.checkout("GPUArrays", "sd/abstractgpu")
-end
-
 using CLArrays
 using GPUArrays.TestSuite, Base.Test
 for dev in CLArrays.devices()
