@@ -10,7 +10,6 @@ using Sugar: isfunction
 using Base: tail
 
 
-
 function _gpu_call(f, A::CLArray, args::Tuple, blocks_threads::Tuple{T, T}) where T <: NTuple{N, Integer} where N
     ctx = context(A)
     _args = (KernelState(), args...) # CLArrays "state"

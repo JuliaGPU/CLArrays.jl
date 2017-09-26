@@ -1,11 +1,13 @@
 import GPUArrays: is_gpu, is_cpu, name, threads, blocks, global_memory
 import GPUArrays: supports_double, local_memory
 
-function devices()
-    filter(cl.devices()) do dev
+
+function devices(filter_funcs...)
+    sort(filter(cl.devices()) do dev
         # These drivers have some problems -  TODO figure out if we are the problem
-        !contains(cl.info(dev, :version), "(Build 10)") # intels experimental 2.1 driver
-    end
+        !contains(cl.info(dev, :version), "(Build 10)") && # intels experimental 2.1 driver
+        !any(f-> !f(dev), filter_funcs)
+    end, by = x-> !is_gpu(x)) # now gpu devices come first
 end
 
 is_gpu(dev::cl.Device) = cl.info(dev, :device_type) == :gpu
