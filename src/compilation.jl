@@ -210,6 +210,8 @@ function assemble_kernel(m::CLMethod)
     append!(body.args, real_body.args)
     body = rewrite_ast(m, body)
     io = Transpiler.CLIO(IOBuffer(), m)
+    println(io, "// Inbuilds")
+    println(io, "typedef char JLBool;")
     println(io, "// dependencies")
     visited = Set()
     for dep in Sugar.dependencies!(m)
@@ -252,10 +254,15 @@ function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
         if version > v"1.2"
             options *= " -cl-std=CL1.2"
         end
-        p = cl.build!(
-            cl.Program(ctx, source = source),
-            options = options
-        )
+        p = try
+            cl.build!(
+                cl.Program(ctx, source = source),
+                options = options
+            )
+        catch e
+            println(source)
+            rethrow(e)
+        end
         kernel = cl.Kernel(p, fname)
         CLFunction{F, T, Tuple{ptr_extract...}}(kernel)
     end
