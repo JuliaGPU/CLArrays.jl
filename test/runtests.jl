@@ -33,3 +33,10 @@ end
 # TestSuite.run_linalg(Typ)
 # TestSuite.run_mapreduce(Typ)
 # TestSuite.run_indexing(Typ)
+
+using CLArrays
+x = rand.(((10, 32), (10, 60_000), (32, 60_000)))
+
+y = CLArray.(x)
+
+Array(A_mul_Bt!(y...)) ≈ A_mul_Bt!(x...)

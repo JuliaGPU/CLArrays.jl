@@ -9,6 +9,7 @@ using Sugar: isfunction
 
 using Base: tail
 
+include("verify/verifier.jl")
 
 function _gpu_call(f, A::CLArray, args::Tuple, blocks_threads::Tuple{T, T}) where T <: NTuple{N, Integer} where N
     ctx = context(A)
@@ -16,6 +17,7 @@ function _gpu_call(f, A::CLArray, args::Tuple, blocks_threads::Tuple{T, T}) wher
     clfunc = CLFunction(f, _args, ctx)
     blocks, threads = blocks_threads
     global_size = blocks .* threads
+    verify_kernel(clfunc.src, (threads, global_size))
     clfunc(_args, global_size, threads)
 end
 
@@ -238,6 +240,7 @@ end
 
 immutable CLFunction{F, Args, Ptrs}
     kernel::cl.Kernel
+    src::String
 end
 
 function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
@@ -264,7 +267,7 @@ function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
             rethrow(e)
         end
         kernel = cl.Kernel(p, fname)
-        CLFunction{F, T, Tuple{ptr_extract...}}(kernel)
+        CLFunction{F, T, Tuple{ptr_extract...}}(kernel, source)
     end
 end
 function (clf::CLFunction{F, Args, Ptrs})(
