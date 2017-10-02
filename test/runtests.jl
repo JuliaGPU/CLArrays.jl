@@ -14,12 +14,22 @@ for dev in CLArrays.devices()
             @test Array(y) == muladd(a, 2f0, abs.(a))
             ###########
             # issue #20
-
             against_base(a-> abs.(a), CLArray{Float32}, (10, 10))
+
+            #### bools in kernel:
+        end
+        @testset "bools" begin
+            A, B = rand(Bool, 10), rand(Bool, 10)
+            Ag, Bg = CLArray(A), CLArray(B)
+            res = A .& B
+            resg = Ag .& Bg
+            @test res == Array(resg)
+            # this version needs to have a fix in GPUArrays, since it uses T.(array)
+            # in copy to convert to array type, but that actually convert Array{Bool} to BitArray
+            # against_base((a, b)-> a .& b, CLArray{Bool}, (10,), (10,))
         end
     end
 end
-
 
 # The above is equal to:
 # Typ = CuArray
