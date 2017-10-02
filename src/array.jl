@@ -24,6 +24,14 @@ size(x::CLArray) = Int.(x.size)
 pointer(x::CLArray) = x.ptr
 context(p::CLArray) = context(pointer(p))
 
+# Avoid conflict with OpenCL.cl
+module Shorthands
+    using ..CLArrays
+    cl(x) = x
+    cl(x::CLArrays.CLArray) = x
+    cl(xs::AbstractArray) = isbits(xs) ? xs : CLArrays.CLArray(xs)
+end
+
 function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context()) where {T, N}
     # element type has different padding from cl type in julia
     # for fixedsize arrays we use vload/vstore, so we can use it packed
