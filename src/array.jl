@@ -9,14 +9,14 @@ import Base: pointer, similar, size, copy!, convert
 using Base: RefValue
 
 mutable struct CLArray{T, N} <: GPUArray{T, N}
-    ptr::OwnedPtr{T}
     size::NTuple{N, Cuint}
+    ptr::OwnedPtr{T}
 end
 
 
 # arguments are swapped to not override default constructor
-function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ptr::OwnedPtr{T}) where {T, N}
-    arr = CLArray{T, N}(ptr, size)
+function (::Type{CLArray{T, N}})(ptr::OwnedPtr{T}, size::NTuple{N, Integer}) where {T, N}
+    arr = CLArray{T, N}(size, ptr)
     finalizer(arr, unsafe_free!)
     arr
 end
@@ -32,14 +32,14 @@ module Shorthands
     cl(xs::AbstractArray) = isbits(xs) ? xs : CLArrays.CLArray(xs)
 end
 
-function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx = global_context()) where {T, N}
+function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx::cl.Context = global_context()) where {T, N}
     # element type has different padding from cl type in julia
     # for fixedsize arrays we use vload/vstore, so we can use it packed
-    clT = !Transpiler.is_fixedsize_array(T) ? cl.packed_convert(T) : T
+    clT = T #!Transpiler.is_fixedsize_array(T) ? cl.packed_convert(T) : T
     elems = prod(size)
     elems = elems == 0 ? 1 : elems # OpenCL can't allocate 0 sized buffers
     ptr = Mem.alloc(clT, elems, ctx)
-    CLArray{clT, N}(size, ptr)
+    CLArray{clT, N}(ptr, size)
 end
 
 raw_print(msg::AbstractString...) =

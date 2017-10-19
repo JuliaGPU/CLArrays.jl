@@ -1,8 +1,10 @@
 using CLArrays
 using GPUArrays.TestSuite, Base.Test
+
 for dev in CLArrays.devices()
     CLArrays.init(dev)
     @testset "Device: $dev" begin
+
         TestSuite.run_tests(CLArray)
 
         @testset "muladd & abs" begin
@@ -31,15 +33,98 @@ for dev in CLArrays.devices()
     end
 end
 
-# The above is equal to:
-# Typ = CuArray
+# #The above is equal to:
+# Typ = CLArray
 # GPUArrays.allowslow(false)
 # TestSuite.run_gpuinterface(Typ)
 # TestSuite.run_base(Typ)
 # TestSuite.run_blas(Typ)
-# TestSuite.run_broadcasting(Typ)
+# TestSuite.run_broadcasting(CLArray)
 # TestSuite.run_construction(Typ)
 # TestSuite.run_fft(Typ)
 # TestSuite.run_linalg(Typ)
 # TestSuite.run_mapreduce(Typ)
 # TestSuite.run_indexing(Typ)
+#
+# function test_sizes6(state, out)
+#     x1 = (1, 2, 3)
+#     out[1] = sizeof(x1)
+#
+#     x2 = (1f0, 2f0, 3f0)
+#     out[2] = sizeof(x2)
+#
+#     x3 = ((1f0, 2f0), 1.0)
+#     out[3] = sizeof(x3)
+#
+#     x4 = ((1f0, 2f0, 3f0), 1.0)
+#     out[4] = sizeof(x4)
+#
+#     x5 = ((1f0, 2f0, 3f0, 4f0), 1.0)
+#     out[5] = sizeof(x5)
+#
+#     x6 = (1.0, (1f0, 2f0))
+#     out[6] = sizeof(x6)
+#
+#     x7 = (1.0, (1f0, 2f0, 3f0))
+#     out[7] = sizeof(x7)
+#
+#     x8 = (1.0, (1f0, 2f0, 3f0, 4f0))
+#     out[8] = sizeof(x8)
+#
+#     x9 = ((1f0, 2f0), UInt32(1), 1.0)
+#     out[9] = sizeof(x9)
+#
+#     return
+# end
+#
+# function test_sizes6(state, out)
+#     x1 = 1
+#     out[1] = sizeof(x1)
+#
+#     x2 = (1, 2)
+#     out[2] = sizeof(x2)
+#
+#     x3 = (1, 2, 3)
+#     out[3] = sizeof(x3)
+#
+#     x4 = 1f0
+#     out[4] = sizeof(x4)
+#
+#     x5 = (1f0, 2f0)
+#     out[5] = sizeof(x5)
+#
+#     x6 = (1f0, 2f0, 3f0)
+#     out[6] = sizeof(x6)
+#
+#     x7 = (1f0, 2f0, 3f0, 4f0, 5f0)
+#     out[7] = sizeof(x7)
+#
+#     x8 =  (1f0, 2f0, 3f0, 4f0, 5f0, 6f0)
+#     out[8] = sizeof(x8)
+#
+#     x9 = (1, 2, 3, 4, 5, 6)
+#     out[9] = sizeof(x9)
+#
+#     x10 = UInt8(1)
+#     out[10] = sizeof(x10)
+#
+#     x11 = (x10, x10)
+#     out[11] = sizeof(x11)
+#
+#     x12 = (x10, x10, x10)
+#     out[12] = sizeof(x12)
+#
+#
+#     x13 = CLArrays.DeviceArray{Complex{Float64},3,CLArrays.HostPtr{Complex{Float64}}}(
+#         CLArrays.HostPtr{Complex{Float64}}(),
+#         (Cuint(2), Cuint(2), Cuint(2))
+#     )
+#     out[13] = sizeof(x13)
+#     #
+#     # x14 = (x13, x13)
+#     # out[14] = sizeof(x14)
+#     #
+#     # x15 = (x13, x13, x13)
+#     # out[15] = sizeof(x15)
+#     return
+# end

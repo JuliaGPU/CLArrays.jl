@@ -14,8 +14,8 @@ using GPUArrays: AbstractDeviceArray
 Array type on the device
 """
 struct DeviceArray{T, N, Ptr} <: AbstractDeviceArray{T, N}
-    ptr::Ptr
     size::NTuple{N, Cuint}
+    ptr::Ptr
 end
 # shaninagans for uploading CLArrays to OpenCL as a DeviceArray
 # (spoiler alert: they can't contain pointers while uploading, but can on the device)
@@ -52,11 +52,13 @@ function setindex!(x::OnDeviceArray{T, N}, val, i::Vararg{Integer, N}) where {T,
 end
 
 
+predevice_type(::Type{T}) where T = T
 
-kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(HostPtr{T}(), A.size)
+
+kernel_convert(A::CLArray{T, N}) where {T, N} = PreDeviceArray{T, N}(A.size, HostPtr{T}())
 predevice_type(::Type{GlobalArray{T, N}}) where {T, N} = PreDeviceArray{T, N}
 device_type(::CLArray{T, N}) where {T, N} = GlobalArray{T, N}
-reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = GlobalArray{T, N}(ptr, x.size)
+reconstruct(x::PreDeviceArray{T, N}, ptr::GlobalPointer{T}) where {T, N} = GlobalArray{T, N}(x.size, ptr)
 
 # some converts to inline CLArrays into tuples and refs
 kernel_convert(x::RefValue{T}) where T <: CLArray = RefValue(kernel_convert(x[]))
@@ -123,8 +125,8 @@ synchronize_threads(::KernelState) = cli.barrier(CLK_LOCAL_MEM_FENCE)
 LocalMemory(state::KernelState, ::Type{T}, ::Val{N}, ::Val{C}) where {T, N, C} = Transpiler.cli.LocalPointer{T}()
 
 function (::Type{AbstractDeviceArray})(ptr::PtrT, shape::Vararg{Integer, N}) where PtrT <: Transpiler.cli.LocalPointer{T} where {T, N}
-    DeviceArray{T, N, PtrT}(ptr, shape)
+    DeviceArray{T, N, PtrT}(shape, ptr)
 end
 function (::Type{AbstractDeviceArray})(ptr::PtrT, shape::NTuple{N, Integer}) where PtrT <: Transpiler.cli.LocalPointer{T} where {T, N}
-    DeviceArray{T, N, PtrT}(ptr, shape)
+    DeviceArray{T, N, PtrT}(shape, ptr)
 end

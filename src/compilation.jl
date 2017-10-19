@@ -84,7 +84,7 @@ function contains_pointer(
             push!(pointer_fields, (parent_field..., fname))
             hasptr = true
         else
-            _hasptr, pointer_fields = contains_pointer(FT, (fname,), pointer_fields)
+            _hasptr, pointer_fields = contains_pointer(FT, (parent_field..., fname), pointer_fields)
             hasptr |= _hasptr
         end
     end
@@ -92,7 +92,7 @@ function contains_pointer(
 end
 
 get_fields_type(T, fields::Tuple{X}) where X = fieldtype(T, first(fields))
-get_fields_type(T, fields::Tuple{Vararg{Any, N}}) where N = get_fields_type(fieldtype(T, first(fields)), Base.tail(fields))
+get_fields_type(T, fields::NTuple{N, Any}) where N = get_fields_type(fieldtype(T, first(fields)), Base.tail(fields))
 
 get_fields(x, fields::NTuple{1}) = getfield(x, first(fields))
 get_fields(x, fields::NTuple{N, Any}) where N = get_fields(getfield(x, first(fields)), Base.tail(fields))
@@ -250,6 +250,7 @@ function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
     get!(compiled_functions, (ctx.id, f, cltypes)) do # TODO make this faster
         method = CLMethod((f, cltypes))
         source, fname, ptr_extract = assemble_kernel(method)
+        # println(source)
         options = "-cl-denorms-are-zero -cl-mad-enable -cl-unsafe-math-optimizations"
         if version > v"1.2"
             options *= " -cl-std=CL1.2"
