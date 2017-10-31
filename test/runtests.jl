@@ -33,6 +33,10 @@ for dev in CLArrays.devices()
     end
 end
 
+# Indexing with
+# Issue
+#   ([CartesianIndex(2,2), CartesianIndex(2,1)],) # Array{CartesianIndex} # FAIL
+
 # #The above is equal to:
 # Typ = CLArray
 # GPUArrays.allowslow(false)
@@ -128,3 +132,4 @@ end
 #     # out[15] = sizeof(x15)
 #     return
 # end
+

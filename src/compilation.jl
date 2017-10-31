@@ -9,7 +9,6 @@ using Sugar: isfunction
 
 using Base: tail
 
-
 function _gpu_call(f, A::CLArray, args::Tuple, blocks_threads::Tuple{T, T}) where T <: NTuple{N, Integer} where N
     ctx = context(A)
     _args = (KernelState(), args...) # CLArrays "state"
@@ -250,7 +249,6 @@ function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
     get!(compiled_functions, (ctx.id, f, cltypes)) do # TODO make this faster
         method = CLMethod((f, cltypes))
         source, fname, ptr_extract = assemble_kernel(method)
-        # println(source)
         options = "-cl-denorms-are-zero -cl-mad-enable -cl-unsafe-math-optimizations"
         if version > v"1.2"
             options *= " -cl-std=CL1.2"
