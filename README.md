@@ -24,3 +24,5 @@ end
 # you can also filter with is_gpu, is_cpu
 gpu_devices = CLArrays.devices(is_gpu)
 ```
+
+Note that CLArrays.jl does not handle installing OpenCL drivers for your machine. You will need to make sure you have the appropriate drivers installed for your hardware.
