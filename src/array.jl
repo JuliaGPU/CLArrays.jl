@@ -119,3 +119,11 @@ function copy!{T}(
     )
     dest
 end
+
+import Adapt: adapt, adapt_
+
+adapt_(::Type{<:CLArray}, xs::AbstractArray) = isbits(xs) ? xs : convert(CLArray, xs)
+adapt_(::Type{<:CLArray{T}}, xs::AbstractArray{<:Real}) where T <: AbstractFloat =
+    isbits(xs) ? xs : convert(CLArray{T}, xs)
+
+cl(x) = adapt(CLArray{Float32}, x)

@@ -17,6 +17,6 @@ include("context.jl")
 include("compilation.jl")
 include("3rdparty.jl")
 
-export CLArray, gpu_call, is_gpu, is_cpu
+export CLArray, gpu_call, is_gpu, is_cpu, cl
 
 end # module

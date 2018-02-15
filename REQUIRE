@@ -5,6 +5,7 @@ GPUArrays 0.2.0
 StaticArrays
 ColorTypes
 
+Adapt
 Transpiler 0.4.3
 Sugar 0.4.1
 Matcha 0.1.1
