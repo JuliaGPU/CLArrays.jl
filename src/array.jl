@@ -26,12 +26,12 @@ context(p::CLArray) = context(pointer(p))
 
 # Avoid conflict with OpenCL.cl
 module Shorthands
-    using ..CLArray
+    using ..CLArrays: CLArray
     import Adapt: adapt, adapt_
 
     adapt_(::Type{<:CLArray}, xs::AbstractArray) = isbits(xs) ? xs : convert(CLArray, xs)
 
-    cl(x) = adapt(x)
+    cl(x) = adapt(CLArray{Float32}, x)
 
     export cl
 end
