@@ -26,10 +26,14 @@ context(p::CLArray) = context(pointer(p))
 
 # Avoid conflict with OpenCL.cl
 module Shorthands
-    using ..CLArrays
-    cl(x) = x
-    cl(x::CLArrays.CLArray) = x
-    cl(xs::AbstractArray) = isbits(xs) ? xs : CLArrays.CLArray(xs)
+    using ..CLArrays: CLArray
+    import Adapt: adapt, adapt_
+
+    adapt_(::Type{<:CLArray}, xs::AbstractArray) = isbits(xs) ? xs : convert(CLArray, xs)
+
+    cl(x) = adapt(CLArray{Float32}, x)
+
+    export cl
 end
 
 function (::Type{CLArray{T, N}})(size::NTuple{N, Integer}, ctx::cl.Context = global_context()) where {T, N}

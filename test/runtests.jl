@@ -1,4 +1,4 @@
-using CLArrays
+using CLArrays, CLArrays.Shorthands
 using GPUArrays.TestSuite, Base.Test
 
 for dev in CLArrays.devices()
@@ -29,6 +29,13 @@ for dev in CLArrays.devices()
             # this version needs to have a fix in GPUArrays, since it uses T.(array)
             # in copy to convert to array type, but that actually convert Array{Bool} to BitArray
             # against_base((a, b)-> a .& b, CLArray{Bool}, (10,), (10,))
+        end
+
+        @testset "Shorthand Test" begin
+            GPUArrays.allowslow(true)
+            @test collect(cl([1,2])) == [1,2]
+            @test collect(cl([1 2;3 4])) == [1 2;3 4]
+            @test cl([1,2,3]) == CLArray([1,2,3])
         end
     end
 end
@@ -132,4 +139,3 @@ end
 #     # out[15] = sizeof(x15)
 #     return
 # end
-
