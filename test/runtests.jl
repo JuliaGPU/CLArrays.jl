@@ -2,6 +2,9 @@ using CLArrays, CLArrays.Shorthands
 using GPUArrays.TestSuite, Base.Test
 
 for dev in CLArrays.devices()
+    # we only test gpu devices for now - cpu drivers use different
+    # inconsistent struct alignment, which has low priority to be fixed right now
+    is_gpu(dev) || continue
     CLArrays.init(dev)
     @testset "Device: $dev" begin
 
