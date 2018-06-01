@@ -40,6 +40,18 @@ for dev in CLArrays.devices()
             @test collect(cl([1 2;3 4])) == [1 2;3 4]
             @test cl([1,2,3]) == CLArray([1,2,3])
         end
+
+        @testset "gbmv" begin
+            m, n = 10, 11
+            A, x, y = randn(Float32,3,n), randn(Float32,n), zeros(Float32,m)
+
+            Ag, xg, yg = CLArray(A), CLArray(x), CLArray(y)
+
+            BLAS.gbmv!('N', m, 1, 1, 1f0, A, x, 0f0, y)
+            BLAS.gbmv!('N', m, 1, 1, 1f0, Ag, xg, 0f0, yg)
+
+            @test y ≈ Array(yg)
+        end
     end
 end
 
