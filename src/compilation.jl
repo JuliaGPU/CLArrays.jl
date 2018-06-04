@@ -27,6 +27,10 @@ device_type(arg::Mem.OwnedPtr{T}) where T = cli.GlobalPointer{T}
 kernel_convert{T}(x::LocalMemory{T}) = cl.LocalMem(T, x.size)
 kernel_convert{T}(x::Mem.OwnedPtr{T}) = x
 
+string_kernel_convert(x::CLArray) = pointer(x)
+string_kernel_convert(x) = kernel_convert(x)
+
+
 function kernel_convert(x::T) where T
     contains, fields = contains_pointer(T)
     if contains
@@ -266,6 +270,36 @@ function CLFunction(f::F, args::T, ctx = global_context()) where {T, F}
         CLFunction{F, T, Tuple{ptr_extract...}}(kernel)
     end
 end
+
+"""
+Compiles a kernel from f = :kernel_name => source, with arguments args.
+"""
+function CLFunction(f::Pair{Symbol, String}, args::T, ctx = global_context(), options = "-cl-denorms-are-zero -cl-mad-enable -cl-unsafe-math-optimizations") where T
+    device = getcontext!(ctx).device
+    if !supports_double(device) && any(x-> isa(x, Float64), args)
+        error("Float64 is not supported by your device: $device. Make sure to convert all types for the GPU to Float32")
+    end
+    version = cl_version(device)
+    fname, source = f
+    get!(compiled_functions, (ctx.id, fname, T)) do # TODO make this faster
+        if version > v"1.2"
+            options *= " -cl-std=CL1.2"
+        end
+        p = try
+            cl.build!(
+                cl.Program(ctx, source = source),
+                options = options
+            )
+        catch e
+            println(source)
+            rethrow(e)
+        end
+        kernel = cl.Kernel(p, string(fname))
+        # drop kernelstate from args
+        CLFunction{String, T, Tuple{}}(kernel)
+    end
+end
+
 function (clf::CLFunction{F, Args, Ptrs})(
         args::Args, blocks::NTuple{N, Integer}, threads, queue = global_queue()
     ) where {F, Args, Ptrs, N}
@@ -282,6 +316,29 @@ function (clf::CLFunction{F, Args, Ptrs})(
     for fields in to_tuple(Ptrs)
         arg_idx, fields = first(fields), tail(fields)
         cl.set_arg!(kernel, idx, kernel_convert(get_fields(args[arg_idx], fields)))
+        idx += 1
+    end
+    ret_event = Ref{cl.CL_event}()
+    cl.@check cl.api.clEnqueueNDRangeKernel(
+        queue.id, kernel.id,
+        length(gsize), C_NULL, gsize, lsize,
+        0, C_NULL, ret_event
+    )
+    return cl.Event(ret_event[], retain = false)
+end
+
+# Kernels compiled from a string have a different conversion semantic.
+function (clf::CLFunction{String, Args, Tuple{}})(
+        args::Args, blocks::NTuple{N, Integer}, threads, queue = global_queue()
+    ) where {Args, N}
+    @assert N in (1, 2, 3) "invalid block size"
+    gsize = Csize_t[b for b in blocks]
+    lsize = isa(threads, Tuple) ? Csize_t[threads[i] for i=1:length(blocks)] : threads
+    kernel = clf.kernel
+    idx = 1
+    for elem in Iterators.drop(args, 1) # drop kernel state
+        tmp = string_kernel_convert(elem)
+        cl.set_arg!(kernel, idx, tmp)
         idx += 1
     end
     ret_event = Ref{cl.CL_event}()
