@@ -40,6 +40,22 @@ for dev in CLArrays.devices()
             @test collect(cl([1 2;3 4])) == [1 2;3 4]
             @test cl([1,2,3]) == CLArray([1,2,3])
         end
+
+        @testset "Compilation from String" begin
+            copy_source = """
+                __kernel void copy(
+                    __global float *dest,
+                    __global float *source
+                ){
+                int gid = get_global_id(0);
+                dest[gid] = source[gid];
+                }
+            """
+            source = rand(CLArray{Float32}, 1023, 11)
+            dest = zeros(CLArray{Float32}, size(source))
+            gpu_call(:copy => copy_source, dest, (dest, source))
+            Array(dest) == Array(source)
+        end
     end
 end
 
