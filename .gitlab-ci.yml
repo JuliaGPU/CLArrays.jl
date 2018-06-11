@@ -5,6 +5,10 @@ variables:
 .test_template: &test_definition
   before_script:
     - apt-get -qq update && apt-get -qq install -y libclblas-dev libclfft-dev
+    - apt-get install --reinstall -y ca-certificates
+    - apt-get install --reinstall -y openssl
+
+# yum reinstall openssl
   script:
     - julia -e 'versioninfo()'
     # actual testing
