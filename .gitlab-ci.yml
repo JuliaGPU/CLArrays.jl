@@ -3,9 +3,7 @@
     - julia -e 'versioninfo()'
     # actual testing
     - julia -e "Pkg.init();
-                #symlink(\"$CI_PROJECT_DIR\", joinpath(Pkg.dir(), \"$package\"));
-                Pkg.resolve();
-                Pkg.build(\"$package\");
+                Pkg.add(\"$package\");
                 Pkg.test(\"$package\"; coverage=true)"
     # coverage (needs CODECOV_TOKEN secret variable)
     - julia -e 'using Pkg; Pkg.add("Coverage")'
