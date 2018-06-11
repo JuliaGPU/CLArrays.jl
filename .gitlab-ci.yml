@@ -18,7 +18,7 @@ variables:
                 Pkg.test(\"$package\"; coverage=true)"
     # coverage (needs CODECOV_TOKEN secret variable)
     - julia -e 'Pkg.add("Coverage")'
-    - julia -e 'cd(Pkg.dir(\"$package\"));
+    - julia -e 'cd(Pkg.dir("CLArrays"));
                 using Coverage;
                 cl, tl = get_summary(process_folder());
                 println("(", cl/tl*100, "%) covered");
