@@ -1,20 +1,22 @@
+variables:
+  JULIA_PKGDIR: "$CI_PROJECT_DIR/.julia/"
+  package: 'CLArrays'
+
 .test_template: &test_definition
+  before_script:
+    - apt-get -qq update && apt-get -qq install -y libclblas-dev libclfft-dev
+    - apt-get install --reinstall -y ca-certificates
+    - apt-get install --reinstall -y openssl
+
   script:
     - julia -e 'versioninfo()'
     # actual testing
     - julia -e "Pkg.init();
-                symlink(\"$CI_PROJECT_DIR\", joinpath(Pkg.dir(), \"$package\"));
+                symlink(\"$CI_PROJECT_DIR\", Pkg.dir(\"$package\"));
                 Pkg.resolve();
                 Pkg.build(\"$package\");
-                Pkg.test(\"$package\"; coverage=true)"
-    # coverage (needs CODECOV_TOKEN secret variable)
-    - julia -e 'using Pkg; Pkg.add("Coverage")'
-    - julia -e 'using Coverage;
-                cl, tl = get_summary(process_folder());
-                println("(", cl/tl*100, "%) covered");
-                Codecov.submit_local(process_folder(), ".")'
-  coverage: '/\(\d+.\d+\%\) covered/'
-
+                Pkg.test(\"$package\")"
+  
 test:0.6:
-  image: juliagpu/julia:v0.6
+  image: juliagpu/julia:v0.6-opencl
   <<: *test_definition
