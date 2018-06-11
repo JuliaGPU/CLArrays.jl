@@ -8,7 +8,6 @@ variables:
     - apt-get install --reinstall -y ca-certificates
     - apt-get install --reinstall -y openssl
 
-# yum reinstall openssl
   script:
     - julia -e 'versioninfo()'
     # actual testing
@@ -19,14 +18,13 @@ variables:
                 Pkg.test(\"$package\"; coverage=true)"
     # coverage (needs CODECOV_TOKEN secret variable)
     - julia -e 'Pkg.add("Coverage")'
-    - julia -e 'cd(Pkg.dir(\"$package\")); 
+    - julia -e 'cd(Pkg.dir(\"$package\"));
                 using Coverage;
-                folder = process_folder();
-                cl, tl = get_summary(folder);
+                cl, tl = get_summary(process_folder());
                 println("(", cl/tl*100, "%) covered");
-                Codecov.submit_local(folder)'
+                Codecov.submit_local(process_folder())'
   coverage: '/\(\d+.\d+\%\) covered/'
-
+  
 test:0.6:
   image: juliagpu/julia:v0.6-opencl
   <<: *test_definition
