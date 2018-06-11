@@ -1,9 +1,15 @@
+variables:
+  JULIA_PKGDIR: "$CI_PROJECT_DIR/.julia/"
+  package: 'PackageName'
+
 .test_template: &test_definition
   script:
     - julia -e 'versioninfo()'
     # actual testing
     - julia -e "Pkg.init();
-                Pkg.add(\"$package\");
+                symlink(\"$CI_PROJECT_DIR\", joinpath(Pkg.dir(), \"$package\"));
+                Pkg.resolve();
+                Pkg.build(\"$package\");
                 Pkg.test(\"$package\"; coverage=true)"
     # coverage (needs CODECOV_TOKEN secret variable)
     - julia -e 'using Pkg; Pkg.add("Coverage")'
@@ -12,7 +18,6 @@
                 println("(", cl/tl*100, "%) covered");
                 Codecov.submit_local(process_folder(), ".")'
   coverage: '/\(\d+.\d+\%\) covered/'
-  
 
 test:0.6:
   image: juliagpu/julia:v0.6-opencl
