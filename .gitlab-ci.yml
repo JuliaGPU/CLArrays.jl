@@ -1,6 +1,6 @@
 variables:
   JULIA_PKGDIR: "$CI_PROJECT_DIR/.julia/"
-  package: 'PackageName'
+  package: 'CLArrays'
 
 .test_template: &test_definition
   script:
