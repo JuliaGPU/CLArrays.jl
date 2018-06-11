@@ -17,5 +17,5 @@
   
 
 test:0.6:
-  image: juliagpu/julia:v0.6
+   image: juliagpu/julia:v0.6-opencl
   <<: *test_definition
