@@ -3,6 +3,8 @@ variables:
   package: 'CLArrays'
 
 .test_template: &test_definition
+  before_script:
+    - apt-get -qq update && apt-get -qq install -y libclblas-dev libclfft-dev
   script:
     - julia -e 'versioninfo()'
     # actual testing
