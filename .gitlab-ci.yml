@@ -23,7 +23,7 @@ variables:
                 using Coverage;
                 folder = process_folder();
                 cl, tl = get_summary(folder);
-                println(\"(\", cl/tl*100, \"%) covered\");
+                println("(", cl/tl*100, "%) covered");
                 Codecov.submit_local(folder)'
   coverage: '/\(\d+.\d+\%\) covered/'
 
