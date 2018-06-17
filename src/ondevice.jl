@@ -34,6 +34,7 @@ const LocalArray{T, N} = DeviceArray{T, N, LocalPointer{T}}
 const OnDeviceArray{T, N} = Union{GlobalArray{T, N}, LocalArray{T, N}} # Variant on the device containing the correct pointer
 
 size(x::DeviceArray) = x.size
+size(x::DeviceArray, i::Integer) = x.size[i]
 
 getindex(x::OnDeviceArray, ilin::Integer) =  x.ptr[ilin]
 function getindex(x::OnDeviceArray{T, N}, i::Vararg{Integer, N}) where {T, N}

@@ -17,6 +17,8 @@ for dev in CLArrays.devices()
             @test Array(x) == abs.(a)
             y = muladd.(A, 2f0, x)
             @test Array(y) == muladd(a, 2f0, abs.(a))
+            u0 = CLArray(ones(Float32, 32, 32)); u1 = zeros(u0);
+            @test muladd.(2, Array(u0), Array(u1)) == Array(muladd.(2, u0, u1))
             ###########
             # issue #20
             against_base(a-> abs.(a), CLArray{Float32}, (10, 10))
