@@ -1,7 +1,12 @@
 # CLArrays
 
 
-[![](http://ci.maleadt.net/shields/build.php?builder=CLArrays-julia06-x86-64bit&name=julia%200.6)](http://ci.maleadt.net/shields/url.php?builder=CLArrays-julia06-x86-64bit)
+
+**Build status**: [![][gitlab-img]][gitlab-url]
+
+[gitlab-img]: https://gitlab.com/JuliaGPU/CLArrays.jl/badges/master/pipeline.svg
+[gitlab-url]: https://gitlab.com/JuliaGPU/CLArrays.jl/pipelines
+
 
 Implementation of the [abstract GPU Array Interface](https://github.com/JuliaGPU/GPUArrays.jl)
 
