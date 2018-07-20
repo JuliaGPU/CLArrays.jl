@@ -40,3 +40,16 @@ gpu_devices = CLArrays.devices(is_gpu)
 ```
 
 Note that CLArrays.jl does not handle installing OpenCL drivers for your machine. You will need to make sure you have the appropriate drivers installed for your hardware.
+
+#### Install OpenCL drivers for intel graphics in Linux
+
+```
+cd $HOME
+git clone https://github.com/intel/beignet
+cd $HOME/beignet
+sudo apt-get install cmake pkg-config python ocl-icd-dev libegl1-mesa-dev ocl-icd-opencl-dev libdrm-dev libxfixes-dev libxext-dev llvm-3.6-dev clang-3.6 libclang-3.6-dev libtinfo-dev libedit-dev zlib1g-devD
+mkdir build; cd build; cmake ..
+make
+make utest; . utests/setenv.sh; utests/utest_run
+sudo make install
+```
