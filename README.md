@@ -1,5 +1,9 @@
 # CLArrays
 
+**CLArrays.jl is unmaintained and does not work with Julia v1.0 and newer. 
+Please use [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl), 
+[AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), or 
+[oneAPI.jl](https://github.com/JuliaGPU/oneAPI.jl) instead.**
 
 
 **Build status**: [![][gitlab-img]][gitlab-url]
